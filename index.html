@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pickleball Cam Scorer</title>
+<meta name="theme-color" content="#0D1820">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: camera stage + big score panel; side by side in landscape (phone on a tripod), stacked in portrait */
+:root{
+  --bg:#0D1820; --fg:#E7EEF0; --muted:#91A3AC; --surface:#15242E; --line:#24363F;
+  --court:#2E5C8C; --ball:#E4D43E; --teamA:#EDB82B; --teamB:#F2765E; --onTeam:#1B1A17; --warn:#F2765E; --ok:#5FC28A;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;-webkit-tap-highlight-color:transparent;overflow:hidden}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--ball);outline-offset:2px}
+.app{height:100%;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:10px;
+  padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+@media (orientation:landscape){.app{grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr);grid-template-rows:minmax(0,1fr)}}
+
+.stage-wrap{position:relative;min-height:0;display:flex;align-items:center;justify-content:center;background:#000;border-radius:14px;overflow:hidden}
+.stage{position:relative;max-width:100%;max-height:100%;aspect-ratio:16/9;width:100%}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.stage canvas{touch-action:none}
+.stage-msg{position:absolute;inset:auto 10px 10px 10px;background:rgba(13,24,32,.85);border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.4}
+.stage-msg b{color:var(--ball)}
+.pill{position:absolute;top:10px;left:10px;background:rgba(13,24,32,.8);border-radius:999px;padding:4px 10px;font-size:12px;font-variant-numeric:tabular-nums}
+.pill i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:middle}
+.pill.live i{background:var(--ok)}
+.pill.form i{background:var(--ball)}
+
+.panel{display:flex;flex-direction:column;gap:10px;min-height:0;overflow-y:auto}
+.score{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.callnum{font-family:var(--display);font-weight:900;font-size:clamp(72px,16vw,150px);line-height:.9;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+@media (orientation:landscape){.callnum{font-size:clamp(64px,11vw,140px)}}
+.callnum .sep{color:var(--muted);font-weight:700;padding:0 .06em}
+.callnum .sn{color:var(--ball)}
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:6px}
+.tm{display:flex;align-items:center;gap:8px;min-width:0;padding:6px 8px;border-radius:10px;border:1px solid var(--line)}
+.tm.serving{border-color:var(--ball)}
+.sw{width:8px;height:26px;border-radius:4px;flex:none}
+.tm .nm{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.tm .sc{font-family:var(--display);font-weight:800;font-size:28px;font-variant-numeric:tabular-nums}
+
+.last{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.last .who{font-size:clamp(22px,5vw,30px);font-weight:700;line-height:1.15}
+.last .meta{font-size:13px;color:var(--muted)}
+.last .evt{font-size:14px;font-weight:600;color:var(--ball)}
+
+.banner{border-radius:14px;padding:12px;background:#2a2410;border:1px solid var(--ball);display:flex;flex-direction:column;gap:8px}
+.banner .q{font-weight:700}
+.choices{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 14px;font-weight:600;font-size:14px}
+.btn.primary{background:var(--ball);border-color:var(--ball);color:var(--onTeam)}
+.btn.small{padding:7px 10px;font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.row .btn{flex:1 1 auto}
+details.fix{border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+details.fix summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--muted)}
+details.fix[open] summary{margin-bottom:8px}
+.spacer{flex:1}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(16px + env(safe-area-inset-top));background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-weight:700;font-size:14px;z-index:60;max-width:90%;text-align:center}
+
+.sheet{position:fixed;inset:0;background:rgba(3,8,12,.7);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:var(--bg);border:1px solid var(--line);border-radius:18px;width:100%;max-width:560px;max-height:100%;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+.card h2{font-family:var(--display);font-weight:800;font-size:32px;margin:0;letter-spacing:.02em}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;border:none;background:var(--surface);padding:10px;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.field{display:flex;flex-direction:column;gap:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input[type=text],select{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px}
+.pl{position:relative}.pl span{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--muted)}
+.note{font-size:13px;color:var(--muted);line-height:1.5;margin:0}
+.big{font-family:var(--display);font-weight:900;font-size:72px;line-height:1;text-align:center}
+@media (orientation:landscape) and (max-height:500px){.callnum{font-size:clamp(56px,9vw,96px)}.last .who{font-size:20px}.score,.last{padding:10px 12px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <video id="video" playsinline muted autoplay></video>
+      <canvas id="overlay"></canvas>
+      <div class="pill" id="pill"><i></i><span id="pillText">Camera off</span></div>
+      <div class="stage-msg" id="stageMsg"><b>Set up:</b> put the phone on a tripod or fence, high and behind one baseline or in a corner, so all four players and every court line are in view. Then tap <b>Start camera</b>.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="score" aria-live="polite">
+      <div class="label" id="gameLabel">Game 1 · to 11</div>
+      <div class="callnum" id="callNum">0<span class="sep">–</span>0<span class="sep">–</span><span class="sn">2</span></div>
+      <div class="teams" id="teams"></div>
+    </div>
+
+    <div class="last">
+      <div class="label">Last serve</div>
+      <div class="who" id="lastWho">Waiting for the first serve</div>
+      <div class="meta" id="lastMeta">Opening server: first-listed player, right court</div>
+      <div class="evt" id="lastEvt"></div>
+    </div>
+
+    <div class="banner" id="ask" hidden>
+      <div class="q" id="askQ"></div>
+      <div class="choices" id="askChoices"></div>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="camBtn">Start camera</button>
+      <button class="btn" id="calBtn">Set court corners</button>
+    </div>
+
+    <details class="fix">
+      <summary>Fix the score</summary>
+      <div class="row">
+        <button class="btn small" id="undoBtn">Undo</button>
+        <button class="btn small" id="mPoint">Serving team won rally</button>
+        <button class="btn small" id="mLost">Serving team lost rally</button>
+        <button class="btn small" id="gameOverBtn">End game</button>
+        <button class="btn small" id="swapEndsBtn">Teams switched ends</button>
+      </div>
+    </details>
+
+    <div class="spacer"></div>
+    <div class="row">
+      <button class="btn small" id="setupBtn">Match setup</button>
+      <button class="btn small" id="flipBtn">Flip right/left</button>
+      <button class="btn small" id="fileBtn">Test with a video</button>
+      <button class="btn small" id="voiceBtn">Call score: off</button>
+      <input type="file" id="fileIn" accept="video/*" hidden>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<div class="sheet" id="setup" hidden>
+  <form class="card" id="setupForm">
+    <h2>Match setup</h2>
+    <div class="field"><div class="label">Format</div>
+      <div class="seg" id="modeSeg"><button type="button" data-v="doubles">Doubles</button><button type="button" data-v="singles">Singles</button></div></div>
+    <div class="grid2">
+      <div class="field"><div class="label">Team A</div>
+        <input type="text" id="tA" maxlength="18">
+        <div class="pl"><input type="text" id="pA0" maxlength="14"><span>starts right</span></div>
+        <div class="pl dbl"><input type="text" id="pA1" maxlength="14"><span>starts left</span></div></div>
+      <div class="field"><div class="label">Team B</div>
+        <input type="text" id="tB" maxlength="18">
+        <div class="pl"><input type="text" id="pB0" maxlength="14"><span>starts right</span></div>
+        <div class="pl dbl"><input type="text" id="pB1" maxlength="14"><span>starts left</span></div></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><div class="label">Game to (win by 2)</div>
+        <div class="seg" id="targetSeg"><button type="button" data-v="11">11</button><button type="button" data-v="15">15</button><button type="button" data-v="21">21</button></div></div>
+      <div class="field"><div class="label">Serves first</div>
+        <div class="seg" id="firstSeg"><button type="button" data-v="0">Team A</button><button type="button" data-v="1">Team B</button></div></div>
+    </div>
+    <div class="field"><div class="label">Team at the baseline you tap first (corners 1–2)</div>
+      <div class="seg" id="endSeg"><button type="button" data-v="0">Team A</button><button type="button" data-v="1">Team B</button></div></div>
+    <div class="field"><label class="label" for="quality">Detection</label>
+      <select id="quality"><option value="fast">Fast (older phones, close camera)</option><option value="normal">Normal</option><option value="max">Max detail (far side players small)</option></select></div>
+    <button class="btn primary" type="submit">Start match</button>
+    <button class="btn" type="button" id="cancelSetup">Cancel</button>
+    <p class="note">Players should stand in their starting spots for the first serve: the first-listed player of each team on the right. Teammates in clearly different shirt colours lets the app tell them apart; if they look alike it will ask you after some rallies.</p>
+  </form>
+</div>
+
+<div class="sheet" id="winSheet" hidden>
+  <div class="card">
+    <div class="label">Game over</div>
+    <div class="big" id="winScore">11–7</div>
+    <h2 id="winName">Team A wins</h2>
+    <p class="note" id="winNote"></p>
+    <div class="row"><button class="btn" id="winUndo">Undo</button><button class="btn primary" id="nextGame">Next game</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+<script src="engine.js"></script>
+<script src="vision.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
